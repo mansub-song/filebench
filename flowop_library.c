@@ -2288,15 +2288,37 @@ flowoplib_readwholefile(threadflow_t *threadflow, flowop_t *flowop)
 
 	// printf("Read) resolvePath:%s\n",path);
 
+	// printf("read~\n");
+	char command[100];
+	char cid[46];
+	sprintf(command, "ipfs add %s", path);
+	FILE *fp = popen(command, "r");
+    if (fp == NULL)
+    {
+        perror("erro : ");
+        exit(0);
+    }
+
+    while(fgets(command, 100, fp) != NULL)
+    {
+        // printf("read: %s", command);
+		strncpy(cid, &command[6], 46);
+		// printf("cid:%s\n", cid);
+	}
+
 	/* Measure time to read bytes */
-	flowop_beginop(threadflow, flowop);
+	// flowop_beginop(threadflow, flowop);
 	(void) FB_LSEEK(fdesc, 0, SEEK_SET);
 	while ((ret = FB_READ(fdesc, iobuf, iosize)) > 0) {
 		bytes += ret;
 		// filebench_log(LOG_INFO,"read: filename:%s, bytes: %d ret: %d",threadflow->tf_fse[flowop->fo_fdnumber]->fse_path,bytes,ret);
 	}
+
+	flowop_beginop(threadflow, flowop);
+	sprintf(command, "ipfs get %s", cid);
+	system(command);
 	// filebench_log(LOG_INFO,"read: filename:%s, bytes: %d ret: %d",threadflow->tf_fse[flowop->fo_fdnumber]->fse_path,bytes,ret);
-		
+	
 	flowop_endop(threadflow, flowop, bytes);
 
 	if (ret < 0) {
@@ -2385,6 +2407,7 @@ flowoplib_write(threadflow_t *threadflow, flowop_t *flowop)
 	return (FILEBENCH_OK);
 }
 
+
 /*
  * Emulate a write of a whole file.  The size of the file
  * is taken from a filesetentry identified by fo_srcfdnumber or
@@ -2462,7 +2485,7 @@ flowoplib_writewholefile(threadflow_t *threadflow, flowop_t *flowop)
 	// printf("Write) resolvePath:%s\n",path);
 
 	/* Measure time to write bytes */
-	flowop_beginop(threadflow, flowop);
+	// flowop_beginop(threadflow, flowop);
 	for (seek = 0; seek < wss; seek += wsize) {
 		ret = FB_WRITE(fdesc, iobuf, wsize);
 		if (ret != wsize) {
@@ -2474,21 +2497,22 @@ flowoplib_writewholefile(threadflow_t *threadflow, flowop_t *flowop)
 		}
 		wsize = (int)MIN(wss - seek, iosize);
 		bytes += ret;
-	filebench_log(LOG_INFO,"filename:%s, wsize: %d wss: %d seek:%d iosize:%d",path,wsize,wss,seek,iosize); //wss가 전체 파일 사이즈임
+	// filebench_log(LOG_INFO,"filename:%s, wsize: %d wss: %d seek:%d iosize:%d",path,wsize,wss,seek,iosize); //wss가 전체 파일 사이즈임
 	}
-	// filebench_log(LOG_INFO,"2_filename:%s",file->fse_path);
-	
-	
+
 	char command[100];
+
+	flowop_beginop(threadflow, flowop);
 	sprintf(command, "ipfs add %s", path);
-	int ret2 = system(command);
-	printf("cid: %d\n", ret2);
-	sleep(60);
+	system(command);
+	// sleep(60);
 	flowop_endop(threadflow, flowop, bytes);
 	// sleep(100);
 	// filebench_log(LOG_INFO,"3_filename:%s",file->fse_path);
 	return (FILEBENCH_OK);
 }
+
+
 
 
 /*
@@ -2608,7 +2632,7 @@ flowoplib_appendfilerand(threadflow_t *threadflow, flowop_t *flowop)
 	// printf("APPEND) resolvePath:%s\n",path);
 
 	/* Measure time to write bytes */
-	
+	// flowop_beginop(threadflow, flowop);
 
 	(void) FB_LSEEK(fdesc, 0, SEEK_END);
 	ret = FB_WRITE(fdesc, iobuf, appendsize);
@@ -2621,9 +2645,9 @@ flowoplib_appendfilerand(threadflow_t *threadflow, flowop_t *flowop)
 	}
 	// filebench_log(LOG_INFO,"append: filename:%s, ret: %d",threadflow->tf_fse[flowop->fo_fdnumber]->fse_path,ret);
 	
-	flowop_beginop(threadflow, flowop);
 	char command[100];
-	sprintf(command, "ipfs add  %s", path);
+	flowop_beginop(threadflow, flowop);
+	sprintf(command, "ipfs add %s", path);
 	system(command);
 
 	flowop_endop(threadflow, flowop, appendsize);

@@ -159,6 +159,29 @@ fileset_resolvepath(filesetentry_t *entry)
 	return (s);
 }
 
+
+char *
+fileset_resolvepathUnderline(filesetentry_t *entry)
+{
+	filesetentry_t *fsep = entry;
+	char path[MAXPATHLEN];
+	char pathtmp[MAXPATHLEN];
+	char *s;
+
+	path[0] = '\0';
+	while (fsep->fse_parent) {
+		(void) strcpy(pathtmp, "_");
+		(void) fb_strlcat(pathtmp, fsep->fse_path, MAXPATHLEN);
+		(void) fb_strlcat(pathtmp, path, MAXPATHLEN);
+		(void) fb_strlcpy(path, pathtmp, MAXPATHLEN);
+		fsep = fsep->fse_parent;
+	}
+
+	s = malloc(strlen(path) + 1);
+	(void) fb_strlcpy(s, path, MAXPATHLEN);
+	return (s);
+}
+
 /*
  * Creates multiple nested directories as required by the
  * supplied path. Starts at the end of the path, creating
@@ -341,10 +364,6 @@ fileset_alloc_file(filesetentry_t *entry)
 				(void) FB_FREEMEM(&fdesc, entry->fse_size);
 
 			(void) FB_CLOSE(&fdesc);
-
-			// char command[100];
-			// sprintf(command, "ipfs add -Q %s", path);
-			// system(command);
 
 			/* unbusy the allocated entry */
 			fileset_unbusy(entry, TRUE, TRUE, 0);
