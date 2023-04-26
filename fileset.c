@@ -317,6 +317,7 @@ fileset_alloc_file(filesetentry_t *entry)
 	pathtmp = fileset_resolvepath(entry);
 	(void) fb_strlcat(path, pathtmp, MAXPATHLEN);
 	free(pathtmp);
+	
 
 	filebench_log(LOG_DEBUG_IMPL, "Populated %s", entry->fse_path);
 
@@ -341,6 +342,10 @@ fileset_alloc_file(filesetentry_t *entry)
 
 			(void) FB_CLOSE(&fdesc);
 
+			// char command[100];
+			// sprintf(command, "ipfs add -Q %s", path);
+			// system(command);
+
 			/* unbusy the allocated entry */
 			fileset_unbusy(entry, TRUE, TRUE, 0);
 			return (FILEBENCH_OK);
@@ -356,6 +361,10 @@ fileset_alloc_file(filesetentry_t *entry)
 				(void) FB_FREEMEM(&fdesc, entry->fse_size);
 
 			(void) FB_CLOSE(&fdesc);
+
+			// char command[100];
+			// sprintf(command, "ipfs add -Q %s", path);
+			// system(command);
 
 			/* unbusy the allocated entry */
 			fileset_unbusy(entry, TRUE, TRUE, 0);
@@ -411,6 +420,11 @@ fileset_alloc_file(filesetentry_t *entry)
 	(void) FB_CLOSE(&fdesc);
 
 	free(buf);
+
+	// char command[100];
+	// sprintf(command, "ipfs add -Q %s", path);
+	// system(command);
+
 
 	/* unbusy the allocated entry */
 	fileset_unbusy(entry, TRUE, TRUE, 0);
@@ -674,6 +688,7 @@ fileset_pick(fileset_t *fileset, int flags, int tid, int index)
 		} else {
 			atp = &fileset->fs_exist_files;
 		}
+		
 		break;
 
 	case FILESET_PICKDIR:
@@ -812,6 +827,7 @@ fileset_pick(fileset_t *fileset, int flags, int tid, int index)
 
 	/* Indicate that file or directory is now busy */
 	entry->fse_flags |= FSE_BUSY;
+
 
 	(void) ipc_mutex_unlock(&fileset->fs_pick_lock);
 	filebench_log(LOG_DEBUG_SCRIPT, "Picked file %s", entry->fse_path);
@@ -1070,6 +1086,7 @@ fileset_create(fileset_t *fileset)
 			return (FILEBENCH_ERROR);
 	}
 
+	
 	start = gethrtime();
 
 	filebench_log(LOG_VERBOSE, "Creating %s %s...",
@@ -1094,6 +1111,24 @@ fileset_create(fileset_t *fileset)
 		}
 
 		preallocated++;
+
+		fileset = entry->fse_fileset;
+		(void) fb_strlcpy(path, avd_get_str(fileset->fs_path), MAXPATHLEN);
+		(void) fb_strlcat(path, "/", MAXPATHLEN);
+		(void) fb_strlcat(path, avd_get_str(fileset->fs_name), MAXPATHLEN);
+		char *pathtmp = fileset_resolvepath(entry);
+		(void) fb_strlcat(path, pathtmp, MAXPATHLEN);
+		free(pathtmp);
+		// printf("path: %s\n",path);
+
+		// char command[100];
+		// sprintf(command, "ipfs add -Q %s", path);
+		// system(command);
+		// printf("\n");
+		// char *cid = system(command);
+		// printf("cid: %s\n",cid);
+
+
 
 		if (reusing)
 			entry->fse_flags |= FSE_REUSING;
@@ -1152,7 +1187,7 @@ fileset_create(fileset_t *fileset)
 	/* alloc any leaf directories, as required */
 	fileset_pickreset(fileset, FILESET_PICKLEAFDIR);
 	while ((entry = fileset_pick(fileset,
-	    FILESET_PICKFREE | FILESET_PICKLEAFDIR, 0, 0))) {
+	    FILESET_PICKFREE | FILESET_PICKLEAFDIR, 0, 0))) {	
 
 		if (rand() < randno) {
 			/* unbusy the unallocated entry */
@@ -1170,7 +1205,6 @@ fileset_create(fileset_t *fileset)
 		if (fileset_alloc_leafdir(entry) == FILEBENCH_ERROR)
 			return (FILEBENCH_ERROR);
 	}
-
 	filebench_log(LOG_VERBOSE,
 	    "Preallocated %d of %llu of %s %s in %llu seconds",
 	    preallocated,
@@ -1178,6 +1212,7 @@ fileset_create(fileset_t *fileset)
 	    fileset_entity_name(fileset), fileset_name,
 	    (u_longlong_t)(((gethrtime() - start) / 1000000000) + 1));
 
+	// sleep(60);
 	return (FILEBENCH_OK);
 }
 
@@ -1642,6 +1677,7 @@ fileset_populate(fileset_t *fileset)
 	avl_create(&(fileset->fs_dirs), fileset_entry_compare,
 	    sizeof (filesetentry_t), FSE_OFFSETOF(fse_link));
 
+	filebench_log(LOG_INFO,"fs_dirwidth:%d",fileset->fs_dirwidth);
 	/* is dirwidth a random variable? */
 	if (AVD_IS_RANDOM(fileset->fs_dirwidth)) {
 		meandirwidth =
