@@ -517,8 +517,10 @@ fileset_openfile(fb_fdesc_t *fdesc, fileset_t *fileset,
 		open_attrs |= O_SYNC;
 
 #ifdef HAVE_O_DIRECT
-	if (attrs & FLOW_ATTR_DIRECTIO)
+	if (attrs & FLOW_ATTR_DIRECTIO){
+		// printf("HAVE_O_DIRECT\n");
 		open_attrs |= O_DIRECT;
+	}
 #endif /* HAVE_O_DIRECT */
 
 	if (FB_OPEN(fdesc, path, flag | open_attrs, filemode)
@@ -529,6 +531,8 @@ fileset_openfile(fb_fdesc_t *fdesc, fileset_t *fileset,
 
 		fileset_unbusy(entry, FALSE, FALSE, 0);
 		return (FILEBENCH_ERROR);
+	} else {
+		// printf("FB_OPEN else\n"); //here
 	}
 
 #ifdef HAVE_DIRECTIO
