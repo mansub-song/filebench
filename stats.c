@@ -613,6 +613,7 @@ stats_snap(void)
 	filebench_log(LOG_INFO, "%s", str);
 	free(str);
 
+	//here!
 	filebench_log(LOG_INFO,
 	    "IO Summary: %5d ops, %5.3lf ops/s, (%0.0lf/%0.0lf r/w), "
 	    "%5.1lfmb/s, %6.0fus cpu/op, %5.1fms latency",
@@ -634,7 +635,7 @@ stats_snap(void)
 	    iostat->fs_mstate[FLOW_MSTATE_LAT] /
 	    ((iostat->fs_rcount + iostat->fs_wcount) * 1000000.0) : 0);
 
-	filebench_shm->shm_bequiet = 0;
+		filebench_shm->shm_bequiet = 0;
 }
 
 /*

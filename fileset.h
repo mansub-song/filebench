@@ -43,6 +43,8 @@
 #define	FSE_REUSING		0x20
 #define	FSE_THRD_WAITNG		0x40
 
+static char cidPath[] = "/root/euroSys/cids";
+
 typedef struct filesetentry {
 	struct filesetentry	*fse_next;	/* master list of entries */
 	struct filesetentry	*fse_parent;	/* link to directory */

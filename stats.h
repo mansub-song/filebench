@@ -70,6 +70,7 @@ struct flowstats {
 	 * stats_clear() to stats_snap() */
 	hrtime_t	fs_stime;
 	hrtime_t	fs_etime;
+	hrtime_t	fs_elap; /*mssong - elapsed time*/
 
 	hrtime_t	fs_mstate[FLOW_MSTATES]; /* Microstate breakdown */
 	hrtime_t	fs_syscpu;	/* System wide cpu, global only */

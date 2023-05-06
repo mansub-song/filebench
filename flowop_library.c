@@ -559,7 +559,6 @@ flowoplib_read(threadflow_t *threadflow, flowop_t *flowop)
 
 	if (avd_get_bool(flowop->fo_random)) {
 		uint64_t fileoffset;
-
 		if (iosize > wss) {
 			filebench_log(LOG_ERROR,
 			    "file size smaller than IO size for thread %s",
@@ -595,22 +594,72 @@ flowoplib_read(threadflow_t *threadflow, flowop_t *flowop)
 			(void) FB_LSEEK(fdesc, 0, SEEK_SET);
 
 	} else {
-		(void) flowop_beginop(threadflow, flowop);
-		if ((ret = FB_READ(fdesc, iobuf, iosize)) == -1) {
-			(void) flowop_endop(threadflow, flowop, 0);
-			filebench_log(LOG_ERROR,
-			    "read file %s failed, io buffer %zd: %s",
-			    avd_get_str(flowop->fo_fileset->fs_name),
-			    iobuf, strerror(errno));
-			(void) flowop_endop(threadflow, flowop, 0);
-			return (FILEBENCH_ERROR);
+		// printf("here read_else??\n"); //here
+		
+		int srcfd = flowoplib_fdnum(threadflow, flowop);
+		filesetentry_t *file = threadflow->tf_fse[srcfd];
+		char *fs_path =
+				avd_get_str(file->fse_fileset->fs_path); //tmp
+		char *fs_name =
+				avd_get_str(file->fse_fileset->fs_name); //bigfileset
+		// char *filename = file->fse_path;
+		char *filename = fileset_resolvepath(file);
+
+		char path[MAXPATHLEN];
+		(void) fb_strlcpy(path, fs_path, MAXPATHLEN);
+		(void) fb_strlcat(path, "/", MAXPATHLEN);
+		(void) fb_strlcat(path, fs_name, MAXPATHLEN);
+		(void) fb_strlcat(path, filename, MAXPATHLEN);
+
+		char command[MAXPATHLEN];
+		char cid[46];
+		char *cidFile = fileset_resolvepathUnderline(file);
+
+		printf("echo %s/%s\n", path);
+		sprintf(command, "cat %s/%s", cidPath,cidFile);
+		FILE *fp = popen(command, "r");
+		if (fp == NULL)
+		{
+			perror("mssong error : ");
+			exit(0);
 		}
-		(void) flowop_endop(threadflow, flowop, ret);
+
+		while(fgets(command, MAXPATHLEN, fp) != NULL)
+		{
+			// printf("read: %s\n", command);
+			strncpy(cid, &command[6], 46);
+			// printf("cid:%s\n\n\n", cid);
+		}
+
+		
+
+		// (void) flowop_beginop(threadflow, flowop);
+		// if ((ret = FB_READ(fdesc, iobuf, iosize)) == -1) {
+		// 	(void) flowop_endop(threadflow, flowop, 0);
+		// 	filebench_log(LOG_ERROR,
+		// 	    "read file %s failed, io buffer %zd: %s",
+		// 	    avd_get_str(flowop->fo_fileset->fs_name),
+		// 	    iobuf, strerror(errno));
+		// 	(void) flowop_endop(threadflow, flowop, 0);
+		// 	return (FILEBENCH_ERROR);
+		// }
+
+		(void) flowop_beginop(threadflow, flowop);
+		if (cid != NULL) {
+			sprintf(command, "ipfs get %s", cid);
+			system(command);
+		}
+		unsigned long long ll_delay = (gethrtime() - threadflow->tf_stime) / 1000000;
+		// (void) flowop_endop(threadflow, flowop, ret);
+		(void) flowop_endop(threadflow, flowop, wss);
+		// printf("file read: latency:%llu, size:%d\n", ll_delay, wss);
+		
+		sprintf(command, "echo file read: latency: %llu, size: %d >> read.txt", ll_delay, wss);
+		system(command);
 
 		if ((ret == 0))
 			(void) FB_LSEEK(fdesc, 0, SEEK_SET);
 	}
-
 	return (FILEBENCH_OK);
 }
 
@@ -1076,7 +1125,6 @@ flowoplib_bwlimit(threadflow_t *threadflow, flowop_t *flowop)
 		(void) ipc_mutex_unlock(&filebench_shm->shm_eventgen_lock);
 	}
 	flowop_endop(threadflow, flowop, 0);
-
 	return (FILEBENCH_OK);
 }
 
@@ -1923,7 +1971,7 @@ flowoplib_fsyncset(threadflow_t *threadflow, flowop_t *flowop)
 static int
 flowoplib_closefile(threadflow_t *threadflow, flowop_t *flowop)
 {
-	sleep(60);
+	// sleep(60);
 	filesetentry_t *file;
 	fileset_t *fileset;
 	int fd = flowop->fo_fdnumber;
@@ -2299,37 +2347,79 @@ flowoplib_readwholefile(threadflow_t *threadflow, flowop_t *flowop)
 	// printf("Read) resolvePath:%s\n",path);
 
 	// printf("read~\n");
-	// char command[100];
-	// char cid[46];
-	// sprintf(command, "ipfs add %s", path);
-	// FILE *fp = popen(command, "r");
-    // if (fp == NULL)
-    // {
-    //     perror("erro : ");
-    //     exit(0);
-    // }
+	char command[MAXPATHLEN];
+	char filePath[MAXPATHLEN];
+	char cid[46];
+	char *cidFile = fileset_resolvepathUnderline(file);
 
-    // while(fgets(command, 100, fp) != NULL)
-    // {
-    //     // printf("read: %s", command);
-	// 	strncpy(cid, &command[6], 46);
-	// 	// printf("cid:%s\n", cid);
-	// }
 
-	/* Measure time to read bytes */
-	flowop_beginop(threadflow, flowop);
-	(void) FB_LSEEK(fdesc, 0, SEEK_SET);
-	while ((ret = FB_READ(fdesc, iobuf, iosize)) > 0) {
-		bytes += ret;
-		// filebench_log(LOG_INFO,"read: filename:%s, bytes: %d ret: %d",threadflow->tf_fse[flowop->fo_fdnumber]->fse_path,bytes,ret);
+	FILE *existFile;
+	sprintf(filePath, "%s/%s", cidPath,cidFile);
+    if ((existFile = fopen(filePath, "r")))
+    {
+        fclose(existFile);
+        // return 1;
+    } else {
+		printf("no exist cid file!\n");
+		return (FILEBENCH_OK);
 	}
 
+	sprintf(command, "cat %s/%s", cidPath,cidFile);
+	FILE *fp = popen(command, "r");
+	if (fp == NULL)
+	{
+        perror("erro : ");
+        exit(0);
+    }
+    while(fgets(command, MAXPATHLEN, fp) != NULL)
+    {
+        printf("read: %s\n", command);
+		// strncpy(cid, &command[6], 46);
+		strncpy(cid, &command[6], 46);
+		printf("cid:%s\n", cid);
+	}
+
+	/* Measure time to read bytes */
 	// flowop_beginop(threadflow, flowop);
-	// sprintf(command, "ipfs get %s", cid);
-	// system(command);
+	// (void) FB_LSEEK(fdesc, 0, SEEK_SET);
+	// while ((ret = FB_READ(fdesc, iobuf, iosize)) > 0) {
+	// 	bytes += ret;
+	// 	// filebench_log(LOG_INFO,"read: filename:%s, bytes: %d ret: %d",threadflow->tf_fse[flowop->fo_fdnumber]->fse_path,bytes,ret);
+	// }
+
+	flowop_beginop(threadflow, flowop);
+	if (cid != NULL) {
+		sprintf(command, "ipfs get %s", cid);
+		printf("readwholefile command:%s\n", command);
+		system(command);
+	}
 	// filebench_log(LOG_INFO,"read: filename:%s, bytes: %d ret: %d",threadflow->tf_fse[flowop->fo_fdnumber]->fse_path,bytes,ret);
-	
-	flowop_endop(threadflow, flowop, bytes);
+	unsigned long long ll_delay = (gethrtime() - threadflow->tf_stime) / 1000000;
+	// flowop_endop(threadflow, flowop, bytes);
+	flowop_endop(threadflow, flowop, wss);
+
+	sprintf(command, "echo file read: latency: %llu, size: %d >> read.txt", ll_delay, wss);
+	system(command);
+
+
+	//flush the cid file
+	// sprintf(filePath, "/root/ipfs_client/%s",cid);
+	sprintf(filePath, "/root/ipfs_server/%s",cid);
+	FILE *ipfsFile;
+	if ((ipfsFile = fopen(filePath, "r")))
+    {
+		int file_number = fileno(ipfsFile);
+		fsync(file_number);
+		fclose(existFile);
+		// return 1;
+    } 
+
+
+	// sprintf(command, "rm -f %s",cid);
+	// system(command);
+	// sprintf(command, "rm -f /root/ipfs_client/%s",cid);
+	sprintf(command, "rm -f /root/ipfs_server/%s",cid);
+	system(command);
 
 	if (ret < 0) {
 		filebench_log(LOG_ERROR,
@@ -2455,6 +2545,7 @@ flowoplib_writewholefile(threadflow_t *threadflow, flowop_t *flowop)
 	 * the buffer set up call (which would fail) and substitute
 	 * a small buffer, which won't really be used.
 	 */
+
 	if (iosize == 0) {
 		iobuf = (caddr_t)&zerowrtbuf;
 		filebench_log(LOG_DEBUG_SCRIPT,
@@ -2486,43 +2577,69 @@ flowoplib_writewholefile(threadflow_t *threadflow, flowop_t *flowop)
 	char *filename = fileset_resolvepath(file);
 
 	// printf("fs_path: %s, fs_name: %s, filename: %s\n",fs_path,fs_name,filename);
+
 	char path[MAXPATHLEN];
 	(void) fb_strlcpy(path, fs_path, MAXPATHLEN);
 	(void) fb_strlcat(path, "/", MAXPATHLEN);
 	(void) fb_strlcat(path, fs_name, MAXPATHLEN);
 	(void) fb_strlcat(path, filename, MAXPATHLEN);
 
-	// printf("Write) resolvePath:%s\n",path);
+	// char *iobuf_new = (char *) malloc(sizeof(char)*wss);
+    // FILE* random = fopen("/dev/urandom", "r");
+    // fread(iobuf_new, sizeof(unsigned char)*wss, 1, random);
 
-
-	char *iobuf_new = (char *) malloc(sizeof(char)*wss);
-    FILE* random = fopen("/dev/urandom", "r");
-    fread(iobuf_new, sizeof(unsigned char)*wss, 1, random);
-
-
-	/* Measure time to write bytes */
-	// flowop_beginop(threadflow, flowop);
-	for (seek = 0; seek < wss; seek += wsize) {
-		ret = write(fdesc->fd_num, iobuf_new, wsize);
-		// ret = FB_WRITE(fdesc, iobuf, wsize);
-		if (ret != wsize) {
-			filebench_log(LOG_ERROR,
-			    "Failed to write %d bytes on fd %d: %s",
-			    wsize, fdesc->fd_num, strerror(errno));
-			flowop_endop(threadflow, flowop, 0);
-			return (FILEBENCH_ERROR);
-		}
-		wsize = (int)MIN(wss - seek, iosize);
-		bytes += ret;
-	// filebench_log(LOG_INFO,"filename:%s, wsize: %d wss: %d seek:%d iosize:%d, bytes:%d",path,wsize,wss,seek,iosize,bytes); //wss가 전체 파일 사이즈임
+	// /* Measure time to write bytes */
+	// // flowop_beginop(threadflow, flowop);
+	// for (seek = 0; seek < wss; seek += wsize) {
+	// 	ret = write(fdesc->fd_num, iobuf_new, wsize);
+	// 	// ret = FB_WRITE(fdesc, iobuf, wsize);
+	// 	if (ret != wsize) {
+	// 		filebench_log(LOG_ERROR,
+	// 		    "Failed to write %d bytes on fd %d: %s",
+	// 		    wsize, fdesc->fd_num, strerror(errno));
+	// 		flowop_endop(threadflow, flowop, 0);
+	// 		return (FILEBENCH_ERROR);
+	// 	}
+	// 	wsize = (int)MIN(wss - seek, iosize);
+	// 	bytes += ret;
+	// // filebench_log(LOG_INFO,"filename:%s, wsize: %d wss: %d seek:%d iosize:%d, bytes:%d",path,wsize,wss,seek,iosize,bytes); //wss가 전체 파일 사이즈임
+	// }
+	
+	char command[MAXPATHLEN];
+	int count;
+	if ((file->fse_size / 1024 / 1024 / 1024) > 0) //GiB
+	{
+		count = file->fse_size / 1024 / 1024;
+		count = count + 1;
+		sprintf(command, "dd if=/dev/urandom of=%s bs=1M count=%d", path, count);
+		system(command);
+	} else if ((file->fse_size / 1024 / 1024) > 0) {
+		count = file->fse_size / 1024 / 1024;
+		count = count + 1;
+		sprintf(command, "dd if=/dev/urandom of=%s bs=1M count=%d", path, count);
+		system(command);
+	} else if ((file->fse_size / 1024) > 0) {
+		count = file->fse_size / 1024;
+		count = count + 1;
+		sprintf(command, "dd if=/dev/urandom of=%s bs=1K count=%d", path, count);
+		system(command);
+	} else {
+		count = file->fse_size;
+		sprintf(command, "dd if=/dev/urandom of=%s bs=1 count=%d", path, count);
+		system(command);
 	}
 
-	char command[100];
+	char *cidFile = fileset_resolvepathUnderline(file);
 
 	flowop_beginop(threadflow, flowop);
-	sprintf(command, "ipfs add %s", path);
+	// sprintf(command, "ipfs add %s > %s/%s", path,cidPath,cidFile);
+	sprintf(command, "ipfs-cluster-ctl add %s > %s/%s", path,cidPath,cidFile);
 	system(command);
-	flowop_endop(threadflow, flowop, bytes);
+	unsigned long long ll_delay = (gethrtime() - threadflow->tf_stime) / 1000000;
+	flowop_endop(threadflow, flowop, file->fse_size);
+
+	sprintf(command, "echo file write: latency: %llu, size: %d >> write.txt", ll_delay, wss);
+	system(command);
 	// sleep(100);
 	// filebench_log(LOG_INFO,"3_filename:%s",file->fse_path);
 	return (FILEBENCH_OK);
@@ -2648,7 +2765,7 @@ flowoplib_appendfilerand(threadflow_t *threadflow, flowop_t *flowop)
 	// printf("APPEND) resolvePath:%s\n",path);
 
 	/* Measure time to write bytes */
-	flowop_beginop(threadflow, flowop);
+	// flowop_beginop(threadflow, flowop);
 
 	(void) FB_LSEEK(fdesc, 0, SEEK_END);
 	ret = FB_WRITE(fdesc, iobuf, appendsize);
@@ -2661,12 +2778,20 @@ flowoplib_appendfilerand(threadflow_t *threadflow, flowop_t *flowop)
 	}
 	// filebench_log(LOG_INFO,"append: filename:%s, ret: %d",threadflow->tf_fse[flowop->fo_fdnumber]->fse_path,ret);
 	
-	// char command[100];
-	// flowop_beginop(threadflow, flowop);
-	// sprintf(command, "ipfs add %s", path);
-	// system(command);
+	char command[MAXPATHLEN];
+	char *cidFile = fileset_resolvepathUnderline(file);
 
-	flowop_endop(threadflow, flowop, appendsize);
+	flowop_beginop(threadflow, flowop);
+	// sprintf(command, "ipfs add %s > %s/%s", path,cidPath,cidFile);
+	sprintf(command, "ipfs-cluster-ctl add %s > %s/%s", path,cidPath,cidFile);
+	printf("command:%s\n", command);
+	system(command);
+	unsigned long long ll_delay = (gethrtime() - threadflow->tf_stime) / 1000000;
+
+	// flowop_endop(threadflow, flowop, appendsize);
+	flowop_endop(threadflow, flowop, wss);
+	sprintf(command, "echo file append: latency: %llu, size: %d >> write.txt", ll_delay, wss);
+	system(command);
 	
 	return (FILEBENCH_OK);
 }

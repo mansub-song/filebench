@@ -237,6 +237,7 @@ flowop_endop(threadflow_t *threadflow, flowop_t *flowop, int64_t bytes)
 
 	flowop->fo_stats.fs_mstate[FLOW_MSTATE_LAT] += ll_delay;
 #ifdef HAVE_PROC_PID_LWP
+	// printf("HAVE_PROC_PID_LWP\n");
 	if ((filebench_shm->shm_mmode & FILEBENCH_MODE_NOUSAGE) == 0) {
 		if ((pread(threadflow->tf_lwpusagefd, &threadflow->tf_eusage,
 		    sizeof (struct prusage), 0)) != sizeof (struct prusage))
@@ -264,6 +265,7 @@ flowop_endop(threadflow_t *threadflow, flowop_t *flowop, int64_t bytes)
 		    threadflow->tf_eusage.pr_slptime);
 	}
 #elif defined(HAVE_PROC_PID_STAT)
+	// printf("HAVE_PROC_PID_STAT\n"); //here!
 	int tid;
 	char fname[128], dummy_str[64];
 	unsigned long utime, stime;
@@ -291,6 +293,7 @@ flowop_endop(threadflow_t *threadflow, flowop_t *flowop, int64_t bytes)
 
 	}
 #endif
+	// printf("endif\n"); //here!
 	flowop->fo_stats.fs_count++;
 	flowop->fo_stats.fs_bytes += bytes;
 	(void) ipc_mutex_lock(&controlstats_lock);

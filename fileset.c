@@ -68,6 +68,7 @@ static int fileset_checkraw(fileset_t *fileset);
 /* maximum parallel allocation control */
 #define	MAX_PARALLOC_THREADS 32
 
+
 /*
  * returns pointer to file or fileset
  * string, as appropriate
@@ -348,6 +349,7 @@ fileset_alloc_file(filesetentry_t *entry)
 	trust_tree = avd_get_bool(fileset->fs_trust_tree);
 	if ((entry->fse_flags & FSE_REUSING) && (trust_tree ||
 	    (FB_STAT(path, &sb) == 0))) {
+		// printf("alloc here?\n");
 		if (FB_OPEN(&fdesc, path, O_RDWR, 0) == FILEBENCH_ERROR) {
 			filebench_log(LOG_INFO,
 			    "Attempted but failed to Re-use file %s",
@@ -390,7 +392,7 @@ fileset_alloc_file(filesetentry_t *entry)
 			return (FILEBENCH_OK);
 		}
 	} else {
-
+		// printf("alloc here else?\n"); //here
 		/* No file or not reusing, so create */
 		if (FB_OPEN(&fdesc, path, O_RDWR | O_CREAT, 0644) ==
 		    FILEBENCH_ERROR) {
@@ -410,32 +412,77 @@ fileset_alloc_file(filesetentry_t *entry)
 		return (FILEBENCH_ERROR);
 	}
 
-	for (seek = 0; seek < entry->fse_size; ) {
-		off64_t wsize;
-		int ret = 0;
+	//mssong
+	// char *buf_new = (char *) malloc(sizeof(char)*entry->fse_size);
+	// FILE* random = fopen("/dev/urandom", "r");
+	// fread(buf_new, sizeof(unsigned char)*entry->fse_size, 1, random);
+	// // printf("entry->fse_size: %d, fdesc.fd_num:%d\n",entry->fse_size,fdesc.fd_num);
 
-		/*
-		 * Write FILE_ALLOC_BLOCK's worth,
-		 * except on last write
-		 */
-		wsize = MIN(entry->fse_size - seek, FILE_ALLOC_BLOCK);
+	// for (seek = 0; seek < entry->fse_size; ) {
+	// 	off64_t wsize;
+	// 	int ret = 0;
 
-		ret = FB_WRITE(&fdesc, buf, wsize);
-		if (ret != wsize) {
-			filebench_log(LOG_ERROR,
-			    "Failed to pre-allocate file %s: %s",
-			    path, strerror(errno));
-			(void) FB_CLOSE(&fdesc);
-			free(buf);
-			fileset_unbusy(entry, TRUE, FALSE, 0);
-			return (FILEBENCH_ERROR);
-		}
-		seek += wsize;
+		
+	// 	/*
+	// 	 * Write FILE_ALLOC_BLOCK's worth,
+	// 	 * except on last write
+	// 	 */
+	// 	wsize = MIN(entry->fse_size - seek, FILE_ALLOC_BLOCK);
+
+	// 	//mssong
+		
+	// 	ret = write(fdesc.fd_num, buf_new, wsize);
+
+	// 	// ret = FB_WRITE(&fdesc, buf, wsize);
+	// 	if (ret != wsize) {
+	// 		filebench_log(LOG_ERROR,
+	// 		    "Failed to pre-allocate file %s: %s",
+	// 		    path, strerror(errno));
+	// 		(void) FB_CLOSE(&fdesc);
+	// 		free(buf);
+	// 		fileset_unbusy(entry, TRUE, FALSE, 0);
+	// 		return (FILEBENCH_ERROR);
+	// 	}
+	// 	seek += wsize;
+	// }
+
+	// if (!avd_get_bool(fileset->fs_cached))
+	// 	(void) FB_FREEMEM(&fdesc, entry->fse_size);
+
+	printf("path:%s\n", path);
+	char command[MAXPATHLEN];
+	int count;
+	if ((entry->fse_size / 1024 / 1024 / 1024) > 0) //GiB
+	{
+		count = entry->fse_size / 1024 / 1024;
+		count = count + 1;
+		sprintf(command, "dd if=/dev/urandom of=%s bs=1M count=%d", path, count);
+		system(command);
+	} else if ((entry->fse_size / 1024 / 1024) > 0) {
+		count = entry->fse_size / 1024 / 1024;
+		count = count + 1;
+		printf("here??_0:%s\n",path);
+		sprintf(command, "dd if=/dev/urandom of=%s bs=1M count=%d", path, count);
+		system(command);
+	} else if ((entry->fse_size / 1024) > 0) {
+		count = entry->fse_size / 1024;
+		count = count + 1;
+		sprintf(command, "dd if=/dev/urandom of=%s bs=1K count=%d", path, count);
+		system(command);
+	} else {
+		count = entry->fse_size;
+		sprintf(command, "dd if=/dev/urandom of=%s bs=1 count=%d", path, count);
+		system(command);
 	}
-
-	if (!avd_get_bool(fileset->fs_cached))
-		(void) FB_FREEMEM(&fdesc, entry->fse_size);
-
+	printf("here??_1:%s\n",path);
+	char *cidFile = fileset_resolvepathUnderline(entry);
+	printf("here??_2: %s/%s\n",cidPath,cidFile);
+	// printf("path: %s\n", path);
+	// sprintf(command, "ipfs add %s > %s/%s", path, cidPath, cidFile);
+	sprintf(command, "ipfs-cluster-ctl add %s > %s/%s", path, cidPath, cidFile);
+	printf("command:%s\n", command);
+	system(command);
+	printf("here??_3:%s\n",path);
 	(void) FB_CLOSE(&fdesc);
 
 	free(buf);
@@ -1142,14 +1189,8 @@ fileset_create(fileset_t *fileset)
 		char *pathtmp = fileset_resolvepath(entry);
 		(void) fb_strlcat(path, pathtmp, MAXPATHLEN);
 		free(pathtmp);
-		// printf("path: %s\n",path);
 
-		// char command[100];
-		// sprintf(command, "ipfs add -Q %s", path);
-		// system(command);
-		// printf("\n");
-		// char *cid = system(command);
-		// printf("cid: %s\n",cid);
+		
 
 
 
@@ -1160,7 +1201,7 @@ fileset_create(fileset_t *fileset)
 
 		/* fire off allocation threads for each file if paralloc set */
 		if (avd_get_bool(fileset->fs_paralloc)) {
-
+			// printf("here?"); //here
 			/* limit total number of simultaneous allocations */
 			(void) pthread_mutex_lock(
 			    &filebench_shm->shm_fsparalloc_lock);
@@ -1202,8 +1243,10 @@ fileset_create(fileset_t *fileset)
 			}
 
 		} else {
-			if (fileset_alloc_file(entry) == FILEBENCH_ERROR)
+			// printf("here else?");
+			if (fileset_alloc_file(entry) == FILEBENCH_ERROR){
 				return (FILEBENCH_ERROR);
+			}
 		}
 	}
 
@@ -1235,7 +1278,7 @@ fileset_create(fileset_t *fileset)
 	    fileset_entity_name(fileset), fileset_name,
 	    (u_longlong_t)(((gethrtime() - start) / 1000000000) + 1));
 
-	// sleep(60);
+	// sleep(10);
 	return (FILEBENCH_OK);
 }
 
@@ -1880,6 +1923,9 @@ fileset_createset(fileset_t *fileset)
 	/* wait for allocation threads to finish */
 	filebench_log(LOG_INFO,
 	    "waiting for fileset pre-allocation to finish");
+
+	printf("sleep~\n");
+	sleep(4);
 
 	(void) pthread_mutex_lock(&filebench_shm->shm_fsparalloc_lock);
 	while (filebench_shm->shm_fsparalloc_count > 0)
